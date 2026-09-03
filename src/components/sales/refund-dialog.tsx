@@ -160,18 +160,18 @@ export function RefundDialog({
                             <p className="text-sm text-muted-foreground">{formatToPHP(item.price)}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}>
+                            <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}>
                                 <Minus className="h-3 w-3" />
                             </Button>
                             <Input
                                 type="number"
                                 value={item.quantity}
                                 onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 0)}
-                                className="h-8 w-14 text-center"
+                                className="h-11 w-14 text-center"
                                 max={item.maxQuantity}
                                 min={0}
                             />
-                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}>
+                            <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}>
                                 <Plus className="h-3 w-3" />
                             </Button>
                         </div>

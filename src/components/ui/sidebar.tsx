@@ -272,7 +272,7 @@ const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn("h-7 w-7", className)}
+      className={cn("h-11 w-11", className)}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
@@ -651,9 +651,14 @@ const SidebarMenuSkeleton = React.forwardRef<
     showIcon?: boolean
   }
 >(({ className, showIcon = false, ...props }, ref) => {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
+  // Random width between 50 to 90%. Picked after mount (not via useMemo,
+  // which still runs once during the server render too) so the server and
+  // the client's hydration pass agree on the same initial value - avoids a
+  // React hydration mismatch. The width randomizes in a follow-up render
+  // once mounted, which is fine since that happens after hydration.
+  const [width, setWidth] = React.useState("70%")
+  React.useEffect(() => {
+    setWidth(`${Math.floor(Math.random() * 40) + 50}%`)
   }, [])
 
   return (

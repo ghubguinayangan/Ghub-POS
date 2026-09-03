@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/context/auth-context";
 
 export const metadata: Metadata = {
-  title: "EYIR POS",
+  title: "G-hub POS",
   description: "Modern Point of Sale for retail businesses.",
 };
 
@@ -17,8 +18,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
         <TooltipProvider>
-          {children}
-          <Toaster />
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
         </TooltipProvider>
       </body>
     </html>

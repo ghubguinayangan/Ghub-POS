@@ -105,11 +105,11 @@ export function ManageExpenseCategoriesDialog({ isOpen, onOpenChange }: ManageEx
                                 <p className="flex-1">{category.name}</p>
                             )}
                             {editingCategoryId === category.id ? (
-                                <Button size="icon" variant="ghost" onClick={handleUpdateCategory} className="h-8 w-8"><Check className="h-4 w-4"/></Button>
+                                <Button size="icon" variant="ghost" onClick={handleUpdateCategory} className="h-11 w-11"><Check className="h-4 w-4"/></Button>
                             ) : (
-                                <Button size="icon" variant="ghost" onClick={() => handleEditCategory(category)} className="h-8 w-8"><Edit className="h-4 w-4"/></Button>
+                                <Button size="icon" variant="ghost" onClick={() => handleEditCategory(category)} className="h-11 w-11"><Edit className="h-4 w-4"/></Button>
                             )}
-                                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive h-8 w-8" onClick={() => handleDeleteCategory(category.id)}>
+                                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive h-11 w-11" onClick={() => handleDeleteCategory(category.id)}>
                                     <X className="h-4 w-4"/>
                                 </Button>
                             </div>

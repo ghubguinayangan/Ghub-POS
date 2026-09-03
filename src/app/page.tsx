@@ -2,12 +2,12 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import useMockAuth from "@/hooks/use-mock-auth";
+import { useAuth } from "@/context/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Home() {
   const router = useRouter();
-  const { status, hasAdminAccount, isLoading } = useMockAuth();
+  const { status, hasAdminAccount, isLoading } = useAuth();
 
   useEffect(() => {
     if (!isLoading) {
@@ -16,7 +16,7 @@ export default function Home() {
       } else if (status === "unauthenticated") {
         router.replace("/login");
       } else if (status === "authenticated") {
-        router.replace("/pos");
+        router.replace("/dashboard");
       }
     }
   }, [status, hasAdminAccount, isLoading, router]);

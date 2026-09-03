@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -16,13 +16,16 @@ import {
   PackageX,
   AlertTriangle,
   Users,
-  Undo2,
-  FileDown,
   Wallet,
-  Landmark,
   TrendingDown,
+  RefreshCw,
+  CloudOff,
+  Undo2,
+  Box,
+  Clock,
+  CircleCheck,
 } from "lucide-react";
-import { formatToPHP } from "@/lib/currency";
+import { formatToPHP, formatNumberPH } from "@/lib/currency";
 import {
   ChartContainer,
   ChartLegend,
@@ -34,21 +37,19 @@ import {
   Area,
   AreaChart,
   Line,
-  LineChart,
   Pie,
   PieChart,
-  ResponsiveContainer,
   XAxis,
   YAxis,
   Cell,
   CartesianGrid,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { subDays, format, isWithinInterval, startOfDay } from 'date-fns';
-import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { useSettings } from "@/context/settings-context";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useDevice } from "@/context/device-context";
+import { DeviceSelect } from "@/components/main/device-select";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -57,432 +58,531 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { USERS } from "@/lib/placeholder-data";
-import { useProducts } from "@/context/product-context";
-import { useSales } from "@/context/sales-context";
-import { useExpenses } from "@/context/expense-context";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import {
+  getDailySummaries,
+  getInventory,
+  getSales,
+  getUsers,
+  getExpenses,
+  getUtang,
+  aggregateTotals,
+  buildTrendSeries,
+  aggregateCategorySales,
+  aggregateExpensesByCategory,
+  aggregateUnpaidUtang,
+  aggregateTopProducts,
+  aggregateStaffPerformance,
+  localDateKey,
+  type DailySummaryRow,
+  type InventoryRow,
+  type SaleRow,
+  type GhubUserRow,
+  type ExpenseRow,
+  type UtangRow,
+} from "@/lib/ghub-data";
 
+type DateRangePreset = "today" | "yesterday" | "this-week" | "last-week" | "this-month" | "last-month";
+
+interface DateRange {
+  start: string;
+  end: string;
+  label: string;
+}
+
+function toDateKey(d: Date): string {
+  return localDateKey(d);
+}
+
+function daysAgoKey(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - (days - 1));
+  return toDateKey(d);
+}
+
+function getDateRange(preset: DateRangePreset): DateRange {
+  const now = new Date();
+  const today = toDateKey(now);
+
+  switch (preset) {
+    case "today": {
+      return { start: today, end: today, label: "Today" };
+    }
+    case "yesterday": {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      const key = toDateKey(d);
+      return { start: key, end: key, label: "Yesterday" };
+    }
+    case "this-week": {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      d.setDate(d.getDate() - diff);
+      return { start: toDateKey(d), end: today, label: "This Week" };
+    }
+    case "last-week": {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      d.setDate(d.getDate() - diff - 7);
+      const weekEnd = new Date(d);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      return { start: toDateKey(d), end: toDateKey(weekEnd), label: "Last Week" };
+    }
+    case "this-month": {
+      const d = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start: toDateKey(d), end: today, label: "This Month" };
+    }
+    case "last-month": {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { start: toDateKey(d), end: toDateKey(end), label: "Last Month" };
+    }
+  }
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length > 1) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+}
 
 export default function DashboardPage() {
-  const [timeRange, setTimeRange] = useState("30d");
-  const [selectedStaff, setSelectedStaff] = useState("All");
-  const [leaderboardTimeRange, setLeaderboardTimeRange] = useState("7d");
-  
   const { settings } = useSettings();
-  const { products } = useProducts();
-  const { sales } = useSales();
-  const { expenses } = useExpenses();
-  const { toast } = useToast();
+  const { selectedDeviceId, deviceIds, isLoading: deviceLoading } = useDevice();
 
-  const handleExportPDF = () => {
-    toast({
-        title: "Exporting to PDF...",
-        description: "This is a mock feature for demonstration purposes.",
-    });
-  };
+  const [timeRange, setTimeRange] = useState<DateRangePreset>("today");
+  const [leaderboardTimeRange, setLeaderboardTimeRange] = useState("7d");
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  const handleExportExcel = () => {
-      toast({
-          title: "Exporting to Excel...",
-          description: "This is a mock feature for demonstration purposes.",
-      });
-  };
+  const [summaries, setSummaries] = useState<DailySummaryRow[]>([]);
+  const [inventory, setInventory] = useState<InventoryRow[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
+  const [utang, setUtang] = useState<UtangRow[]>([]);
+  const [leaderboardSales, setLeaderboardSales] = useState<SaleRow[]>([]);
+  const [users, setUsers] = useState<GhubUserRow[]>([]);
 
+  const dateRange = getDateRange(timeRange);
+  const endDate = dateRange.end;
+  const startDate = dateRange.start;
+  const timeRangeLabel = dateRange.label;
 
-  // --- Data Processing ---
+  const leaderboardDays = leaderboardTimeRange === "1d" ? 1 : leaderboardTimeRange === "30d" ? 30 : 7;
+  const leaderboardStart = daysAgoKey(leaderboardDays);
 
-  const staffMembers = useMemo(() => ["All", ...Array.from(new Set(sales.map(s => s.cashier)))], [sales]);
-
-  const interval = useMemo(() => {
-    const days = parseInt(timeRange.replace('d', ''));
-    return { end: new Date(), start: subDays(new Date(), days - 1) };
-  }, [timeRange]);
-
-  const timeFilteredSales = useMemo(() => {
-    return sales.filter(s => isWithinInterval(new Date(s.date), interval));
-  }, [sales, interval]);
-
-  const timeFilteredExpenses = useMemo(() => {
-    return expenses.filter(e => isWithinInterval(new Date(e.date), interval));
-  }, [expenses, interval]);
-  
-  const dashboardFilteredSales = useMemo(() => {
-    if (selectedStaff === 'All') {
-        return timeFilteredSales;
+  const loadDashboardData = useCallback(async () => {
+    if (!selectedDeviceId) {
+      setSummaries([]);
+      setInventory([]);
+      setExpenses([]);
+      setUtang([]);
+      setIsLoading(false);
+      return;
     }
-    return timeFilteredSales.filter(s => s.cashier === selectedStaff);
-  }, [timeFilteredSales, selectedStaff]);
-  
-  const netRevenueForPeriod = dashboardFilteredSales.reduce((sum, sale) => sum + sale.total - (sale.refundedAmount || 0), 0);
-  const totalExpensesForPeriod = timeFilteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const netProfitForPeriod = netRevenueForPeriod - totalExpensesForPeriod;
-  const completedTransactionsForPeriod = dashboardFilteredSales.filter(s => s.status !== 'Refunded');
-  
+    setIsLoading(true);
+    const [summaryRows, inventoryRows, expenseRows, utangRows] = await Promise.all([
+      getDailySummaries(selectedDeviceId, startDate, endDate),
+      getInventory(selectedDeviceId),
+      getExpenses(selectedDeviceId, startDate, endDate),
+      getUtang(selectedDeviceId),
+    ]);
+    setSummaries(summaryRows);
+    setInventory(inventoryRows);
+    setExpenses(expenseRows);
+    setUtang(utangRows);
+    setIsLoading(false);
+  }, [selectedDeviceId, startDate, endDate]);
+
+  const loadLeaderboardData = useCallback(async () => {
+    if (!selectedDeviceId) {
+      setLeaderboardSales([]);
+      setUsers([]);
+      return;
+    }
+    const [salesRows, userRows] = await Promise.all([
+      getSales(selectedDeviceId, leaderboardStart, endDate),
+      getUsers(selectedDeviceId),
+    ]);
+    setLeaderboardSales(salesRows);
+    setUsers(userRows);
+  }, [selectedDeviceId, leaderboardStart, endDate]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData, refreshTick]);
+
+  useEffect(() => {
+    loadLeaderboardData();
+  }, [loadLeaderboardData, refreshTick]);
+
+  // --- Data Processing (from real synced data) ---
+
+  const totals = useMemo(() => aggregateTotals(summaries), [summaries]);
+  const trendData = useMemo(() => buildTrendSeries(summaries, startDate, endDate), [summaries, startDate, endDate]);
+  const categorySalesData = useMemo(() => aggregateCategorySales(summaries), [summaries]);
+  const allTopProducts = useMemo(() => aggregateTopProducts(summaries), [summaries]);
+  const topSellingProducts = allTopProducts.slice(0, 5);
+  const soldProductNames = useMemo(() => new Set(allTopProducts.map((p) => p.product)), [allTopProducts]);
+
+  const lowStockProducts = useMemo(
+    () =>
+      inventory
+        .filter((i) => i.current_stock > 0 && i.current_stock <= settings.lowStockThreshold)
+        .sort((a, b) => a.current_stock - b.current_stock)
+        .slice(0, 5),
+    [inventory, settings.lowStockThreshold]
+  );
+
+  const deadStock = useMemo(
+    () => inventory.filter((i) => !soldProductNames.has(i.product_name)).slice(0, 5),
+    [inventory, soldProductNames]
+  );
+
+  const leaderboardData = useMemo(
+    () => aggregateStaffPerformance(leaderboardSales, users),
+    [leaderboardSales, users]
+  );
+
+  const expensesByCategory = useMemo(() => aggregateExpensesByCategory(expenses), [expenses]);
+  const totalUnpaidCredit = useMemo(() => aggregateUnpaidUtang(utang), [utang]);
+  const avgTransactionValue = totals.transactions > 0 ? totals.totalRevenue / totals.transactions : 0;
+  const outOfStockCount = inventory.filter((i) => i.current_stock <= 0).length;
+  const lowStockAlertCount = inventory.filter((i) => i.current_stock > 0 && i.current_stock <= settings.lowStockThreshold).length;
+  const totalStockAlerts = outOfStockCount + lowStockAlertCount;
+
   const stats = [
-    { title: `Net Revenue (${timeRange})`, value: formatToPHP(netRevenueForPeriod), icon: Banknote },
-    { title: `Total Expenses (${timeRange})`, value: formatToPHP(totalExpensesForPeriod), icon: Wallet, inverted: true },
-    { title: `Net Profit (${timeRange})`, value: formatToPHP(netProfitForPeriod), icon: netProfitForPeriod >= 0 ? TrendingUp : TrendingDown, inverted: netProfitForPeriod < 0 },
-    { title: `Transactions (${timeRange})`, value: `+${completedTransactionsForPeriod.length}`, icon: Receipt },
+    { title: `Net Revenue (${timeRangeLabel})`, value: formatToPHP(totals.totalRevenue), icon: Banknote },
+    { title: `Total Expenses (${timeRangeLabel})`, value: formatToPHP(totals.totalExpenses), icon: Wallet, inverted: true },
+    {
+      title: `Net Profit (${timeRangeLabel})`,
+      value: formatToPHP(totals.netProfit),
+      icon: totals.netProfit >= 0 ? TrendingUp : TrendingDown,
+      inverted: totals.netProfit < 0,
+    },
+    { title: `Transactions (${timeRangeLabel})`, value: `${totals.transactions}`, icon: Receipt },
+    { title: `Refunds (${timeRangeLabel})`, value: formatToPHP(totals.refunds), icon: Undo2, inverted: totals.refunds > 0 },
   ];
 
-  // Sales & Profit Trend Chart Data
-  const salesByDay = dashboardFilteredSales.reduce((acc, sale) => {
-      const day = format(new Date(sale.date), "MMM d");
-      const netSale = sale.total - (sale.refundedAmount || 0);
-      acc[day] = (acc[day] || 0) + netSale;
-      return acc;
-    }, {} as Record<string, number>);
-
-  const expensesByDay = timeFilteredExpenses.reduce((acc, expense) => {
-      const day = format(new Date(expense.date), "MMM d");
-      acc[day] = (acc[day] || 0) + expense.amount;
-      return acc;
-  }, {} as Record<string, number>);
-
-  const profitTrendData = Array.from({ length: parseInt(timeRange.replace('d', '')) }, (_, i) => {
-      const d = subDays(interval.end, i);
-      const day = format(d, "MMM d");
-      const sales = salesByDay[day] || 0;
-      const expenses = expensesByDay[day] || 0;
-      return { 
-          date: day, 
-          Sales: sales,
-          Expenses: expenses,
-          Profit: sales - expenses,
-      };
-    }).reverse();
-  
   const profitChartConfig = {
     Sales: { label: "Sales", color: "hsl(var(--chart-1))" },
     Expenses: { label: "Expenses", color: "hsl(var(--chart-4))" },
     Profit: { label: "Profit", color: "hsl(var(--primary))" },
   };
 
-  // Sales by Category
-  const salesByCategory = dashboardFilteredSales.flatMap(s => s.items).reduce((acc, item) => {
-    const product = products.find(p => p.id === item.productId);
-    if (product) {
-        const category = product.category;
-        acc[category] = (acc[category] || 0) + (item.price * item.quantity);
-    }
-    return acc;
-  }, {} as Record<string, number>);
+  const categoryChartData = categorySalesData.map((c, i) => ({ ...c, fill: `hsl(var(--chart-${(i % 5) + 1}))` }));
+  const categorySalesConfig = Object.fromEntries(
+    categorySalesData.map((c, i) => [c.name, { label: c.name, color: `hsl(var(--chart-${(i % 5) + 1}))` }])
+  );
 
-  const categorySalesData = Object.entries(salesByCategory).map(([name, value]) => ({ name, value, fill: `hsl(var(--chart-${Object.keys(salesByCategory).indexOf(name) + 1}))` }));
-  const categorySalesConfig = Object.fromEntries(Object.keys(salesByCategory).map((key, i) => [key, {label: key, color: `hsl(var(--chart-${i+1}))`}]))
+  const expenseChartData = expensesByCategory.categories.map((c, i) => ({ ...c, fill: `hsl(var(--chart-${(i % 5) + 1}))` }));
+  const expenseCategoryConfig = Object.fromEntries(
+    expensesByCategory.categories.map((c, i) => [c.name, { label: c.name, color: `hsl(var(--chart-${(i % 5) + 1}))` }])
+  );
 
-  // Expenses by Category
-  const expensesByCategory = timeFilteredExpenses.reduce((acc, expense) => {
-    acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const categoryExpenseData = Object.entries(expensesByCategory).map(([name, value]) => ({ name, value, fill: `hsl(var(--chart-${Object.keys(expensesByCategory).indexOf(name) + 1}))` }));
-  const categoryExpenseConfig = Object.fromEntries(Object.keys(expensesByCategory).map((key, i) => [key, {label: key, color: `hsl(var(--chart-${i+1}))`}]))
-
-  // Product Performance
-  const productSales = dashboardFilteredSales.filter(s => s.status !== 'Refunded').flatMap(s => s.items).reduce((acc, item) => {
-    acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const topSellingProducts = Object.entries(productSales)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5)
-    .map(([productId, quantity]) => {
-        const product = products.find(p => p.id === productId);
-        return { ...product!, quantitySold: quantity };
-    });
-  
-  const soldProductIds = new Set(Object.keys(productSales));
-  const deadStock = products.filter(p => !soldProductIds.has(p.id)).slice(0, 5);
-
-  const lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= settings.lowStockThreshold).sort((a,b) => a.stock - b.stock).slice(0, 5);
-
-  // Staff Performance
-  const leaderboardInterval = useMemo(() => {
-    const end = new Date();
-    let start;
-    switch (leaderboardTimeRange) {
-      case "1d":
-        start = new Date();
-        break;
-      case "7d":
-        start = subDays(new Date(), 6);
-        break;
-      case "30d":
-        start = subDays(new Date(), 29);
-        break;
-      default:
-        start = subDays(new Date(), 6);
-    }
-    return { start: startOfDay(start), end };
-  }, [leaderboardTimeRange]);
-
-  const leaderboardFilteredSales = useMemo(() => {
-    // We filter from all sales, not timeFilteredSales which is for the main dashboard
-    return sales.filter(s => isWithinInterval(new Date(s.date), leaderboardInterval));
-  }, [sales, leaderboardInterval]);
-
-
-  const staffPerformance = leaderboardFilteredSales.reduce((acc, sale) => {
-    const cashierName = sale.cashier;
-    if (!acc[cashierName]) {
-        acc[cashierName] = {
-            name: cashierName,
-            sales: 0,
-            transactions: 0,
-        };
-    }
-    acc[cashierName].sales += sale.total - (sale.refundedAmount || 0);
-    acc[cashierName].transactions += 1;
-    return acc;
-  }, {} as Record<string, {name: string, sales: number, transactions: number}>);
-  
-  const userMap = new Map(USERS.map(u => [u.name, u]));
-
-  const getInitials = (name: string) => {
-    const names = name.split(' ');
-    if (names.length > 1) {
-      return `${names[0][0]}${names[names.length - 1][0]}`;
-    }
-    return name.substring(0, 2);
-}
-
-  const leaderboardData = Object.values(staffPerformance)
-    .sort((a, b) => b.sales - a.sales)
-    .map(staff => ({
-      ...staff,
-      avatarUrl: userMap.get(staff.name)?.avatarUrl,
-      initials: getInitials(staff.name)
-    }));
-
+  if (!deviceLoading && deviceIds.length === 0) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
+        <CloudOff className="h-10 w-10 text-muted-foreground" />
+        <h2 className="text-xl font-semibold">No synced data yet</h2>
+        <p className="max-w-md text-sm text-muted-foreground">
+          This dashboard reads live data synced from the G-hub POS mobile app. Open the app, go to
+          Settings → Cloud Sync, and run a sync at least once — data will appear here automatically.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-       <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground">
-                An overview of your store's performance. Charts are interactive on hover.
-            </p>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Live data synced from your G-hub POS mobile app.
+          </p>
         </div>
         <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleExportPDF}>
-                <FileDown className="mr-2 h-4 w-4" />
-                Export PDF
-            </Button>
-            <Button variant="outline" onClick={handleExportExcel}>
-                <FileDown className="mr-2 h-4 w-4" />
-                Export Excel
-            </Button>
-        </div>
-      </div>
-      
-      {/* Filter Bar */}
-      <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-2">
-            <Label className="text-sm font-medium">Time Range</Label>
-            <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-full sm:w-[120px]">
-                    <SelectValue placeholder="Select range" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="7d">7 days</SelectItem>
-                    <SelectItem value="30d">30 days</SelectItem>
-                    <SelectItem value="90d">90 days</SelectItem>
-                </SelectContent>
-            </Select>
-        </div>
-        <div className="flex items-center gap-2">
-            <Label className="text-sm font-medium">Staff</Label>
-            <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Select staff" />
-                </SelectTrigger>
-                <SelectContent>
-                   {staffMembers.map(staff => (
-                       <SelectItem key={staff} value={staff}>{staff}</SelectItem>
-                   ))}
-                </SelectContent>
-            </Select>
+          <DeviceSelect />
+          <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => setRefreshTick((t) => t + 1)} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          </Button>
         </div>
       </div>
 
-      
+      {/* Filter Bar */}
+      <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-2">
+          <Label className="text-sm font-medium">Time Range</Label>
+          <Select value={timeRange} onValueChange={(v) => setTimeRange(v as DateRangePreset)}>
+            <SelectTrigger className="w-full sm:w-[150px]">
+              <SelectValue placeholder="Select range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="yesterday">Yesterday</SelectItem>
+              <SelectItem value="this-week">This Week</SelectItem>
+              <SelectItem value="last-week">Last Week</SelectItem>
+              <SelectItem value="this-month">This Month</SelectItem>
+              <SelectItem value="last-month">Last Month</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {/* Stat Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
-            <Card key={stat.title}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                    <stat.icon className={`h-4 w-4 text-muted-foreground ${stat.inverted ? "text-destructive" : ""}`} />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stat.value}</div>
-                </CardContent>
-            </Card>
+          <Card key={stat.title}>
+            <CardContent className="flex items-start gap-3 p-4">
+              <div className={`shrink-0 rounded-full p-2 ${stat.inverted ? "bg-destructive/10" : "bg-primary/10"}`}>
+                <stat.icon className={`h-4 w-4 ${stat.inverted ? "text-destructive" : "text-primary"}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-muted-foreground">{stat.title}</p>
+                <p className="truncate text-lg font-bold sm:text-2xl">{stat.value}</p>
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
-      
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 gap-6">
-        
-        {/* Sales Trend Chart */}
-        <Card>
-            <CardHeader>
-                <CardTitle>Financial Overview</CardTitle>
-                <CardDescription>Showing data from {format(interval.start, "MMM d")} to {format(interval.end, "MMM d, yyyy")}.</CardDescription>
+
+      {/* Detailed Analytics — mirrors the mobile app's Dashboard section of the same name */}
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight mb-4">Detailed Analytics</h2>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Items Sold</CardTitle>
+              <Box className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-                <ChartContainer config={profitChartConfig} className="h-[300px] w-full">
-                    <ResponsiveContainer>
-                        <AreaChart data={profitTrendData}>
-                            <CartesianGrid vertical={false} />
-                            <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
-                            <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => formatToPHP(Number(value)).slice(0,-3)}/>
-                            <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-                            <ChartLegend content={<ChartLegendContent />} />
-                            <Area dataKey="Sales" type="monotone" fill="var(--color-Sales)" fillOpacity={0.4} stroke="var(--color-Sales)" stackId="a" />
-                             <Area dataKey="Expenses" type="monotone" fill="var(--color-Expenses)" fillOpacity={0.4} stroke="var(--color-Expenses)" stackId="b"/>
-                            <Line dataKey="Profit" type="monotone" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </ChartContainer>
+              <div className="text-lg font-bold sm:text-2xl">{formatNumberPH(totals.itemsSold)}</div>
+              <p className="text-xs text-muted-foreground mt-1">Total units for this period</p>
             </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg Transaction</CardTitle>
+              <Receipt className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-bold sm:text-2xl">{formatToPHP(avgTransactionValue)}</div>
+              <p className="text-xs text-muted-foreground mt-1">Per sale, this period</p>
+            </CardContent>
+          </Card>
+
+          <Card className={totalStockAlerts > 0 ? "border-destructive" : undefined}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Stock</CardTitle>
+              {totalStockAlerts > 0 ? (
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+              ) : (
+                <CircleCheck className="h-4 w-4 text-green-600" />
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className={`text-lg font-bold sm:text-2xl ${totalStockAlerts > 0 ? "text-destructive" : "text-green-600"}`}>
+                {totalStockAlerts === 0 ? "Good" : `${totalStockAlerts} Alert${totalStockAlerts > 1 ? "s" : ""}`}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {outOfStockCount} out of stock, {lowStockAlertCount} low
+              </p>
+            </CardContent>
+          </Card>
+
+          {utang.length > 0 && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Credit</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg font-bold sm:text-2xl">{formatToPHP(totalUnpaidCredit)}</div>
+                <p className="text-xs text-muted-foreground mt-1">Outstanding utang balance</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Cost of Goods and ROI aren&apos;t shown here — the mobile app computes those from product cost data that
+          isn&apos;t currently part of the sync.
+        </p>
+      </div>
+
+      {/* Trend Chart */}
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Financial Overview</CardTitle>
+            <CardDescription>
+              Showing data from {startDate} to {endDate}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={profitChartConfig} className="h-[300px] w-full">
+              <AreaChart data={trendData}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={(value) => formatToPHP(Number(value)).slice(0, -3)}
+                />
+                <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Area dataKey="Sales" type="monotone" fill="var(--color-Sales)" fillOpacity={0.4} stroke="var(--color-Sales)" stackId="a" />
+                <Area dataKey="Expenses" type="monotone" fill="var(--color-Expenses)" fillOpacity={0.4} stroke="var(--color-Expenses)" stackId="b" />
+                <Line dataKey="Profit" type="monotone" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-         {/* Sales by Category */}
+        {/* Sales by Category */}
         <Card>
-            <CardHeader>
-                <CardTitle>Sales by Category</CardTitle>
-                <CardDescription>Revenue distribution across product categories.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex items-center justify-center">
-                 <ChartContainer config={categorySalesConfig} className="h-[250px] w-full">
-                    <ResponsiveContainer>
-                        <PieChart>
-                            <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="name" />} />
-                            <Pie data={categorySalesData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} labelLine={false}>
-                               {categorySalesData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                                ))}
-                            </Pie>
-                            <ChartLegend content={<ChartLegendContent />} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </ChartContainer>
-            </CardContent>
+          <CardHeader>
+            <CardTitle>Sales by Category</CardTitle>
+            <CardDescription>Revenue distribution across product categories.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center">
+            {categoryChartData.length > 0 ? (
+              <ChartContainer config={categorySalesConfig} className="h-[250px] w-full">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="name" />} />
+                  <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} labelLine={false}>
+                    {categoryChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartLegend content={<ChartLegendContent />} />
+                </PieChart>
+              </ChartContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground py-10">No sales recorded for this period.</p>
+            )}
+          </CardContent>
         </Card>
-         {/* Expenses by Category */}
+
+        {/* Expenses by Category */}
         <Card>
-            <CardHeader>
-                <CardTitle>Expenses by Category</CardTitle>
-                <CardDescription>Cost distribution across expense categories.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex items-center justify-center">
-                 <ChartContainer config={categoryExpenseConfig} className="h-[250px] w-full">
-                    <ResponsiveContainer>
-                        <PieChart>
-                            <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="name" />} />
-                            <Pie data={categoryExpenseData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} labelLine={false}>
-                               {categoryExpenseData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                                ))}
-                            </Pie>
-                            <ChartLegend content={<ChartLegendContent />} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </ChartContainer>
-            </CardContent>
+          <CardHeader>
+            <CardTitle>Expenses by Category</CardTitle>
+            <CardDescription>Cost distribution across expense categories.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center">
+            {expenseChartData.length > 0 ? (
+              <ChartContainer config={expenseCategoryConfig} className="h-[250px] w-full">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="name" />} />
+                  <Pie data={expenseChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} labelLine={false}>
+                    {expenseChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartLegend content={<ChartLegendContent />} />
+                </PieChart>
+              </ChartContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground py-10">No expenses recorded for this period.</p>
+            )}
+          </CardContent>
         </Card>
       </div>
 
       <h2 className="text-2xl font-bold tracking-tight">Product Performance</h2>
-       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5 text-green-500" />
-                        <CardTitle>Top Selling Products</CardTitle>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-green-500" />
+              <CardTitle>Top Selling Products</CardTitle>
+            </div>
+            <CardDescription>Highest sales volume in this period.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-4">
+              {topSellingProducts.length > 0 ? (
+                topSellingProducts.map((product) => (
+                  <li key={product.product} className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <p className="font-medium truncate">{product.product}</p>
+                      <p className="text-sm text-muted-foreground">{formatToPHP(product.revenue)}</p>
                     </div>
-                    <CardDescription>Products with the highest sales volume in this period.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ul className="space-y-4">
-                       {topSellingProducts.length > 0 ? topSellingProducts.map(product => (
-                            <li key={product.id} className="flex items-center gap-4">
-                                <Image src={product.imageUrl} alt={product.name} width={40} height={40} className="rounded-md" data-ai-hint={product.imageHint} />
-                                <div className="flex-1">
-                                    <p className="font-medium truncate">{product.name}</p>
-                                    <p className="text-sm text-muted-foreground">{product.category}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-bold">{product.quantitySold.toLocaleString()}</p>
-                                    <p className="text-xs text-muted-foreground">units sold</p>
-                                </div>
-                            </li>
-                        )) : <p className="text-muted-foreground text-sm text-center">No sales recorded for this period.</p>}
-                    </ul>
-                </CardContent>
-            </Card>
+                    <div className="text-right">
+                      <p className="font-bold">{formatNumberPH(product.quantity)}</p>
+                      <p className="text-xs text-muted-foreground">units sold</p>
+                    </div>
+                  </li>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-sm text-center">No sales recorded for this period.</p>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
 
-            {settings.enableStockTracking && (
-                <>
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center gap-2">
-                                <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                                <CardTitle>Low Stock Products</CardTitle>
-                            </div>
-                            <CardDescription>Products that need to be restocked soon.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ul className="space-y-4">
-                                {lowStockProducts.length > 0 ? lowStockProducts.map(product => (
-                                    <li key={product.id} className="flex items-center gap-4">
-                                        <Image src={product.imageUrl} alt={product.name} width={40} height={40} className="rounded-md" data-ai-hint={product.imageHint} />
-                                        <div className="flex-1">
-                                            <p className="font-medium truncate">{product.name}</p>
-                                            <p className="text-sm text-muted-foreground">{product.category}</p>
-                                        </div>
-                                        <Badge variant="secondary">{product.stock} in stock</Badge>
-                                    </li>
-                                )) : <p className="text-muted-foreground text-sm">No products are low on stock.</p>}
-                            </ul>
-                        </CardContent>
-                    </Card>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              <CardTitle>Low Stock Products</CardTitle>
+            </div>
+            <CardDescription>Products that need to be restocked soon.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-4">
+              {lowStockProducts.length > 0 ? (
+                lowStockProducts.map((product) => (
+                  <li key={product.product_name} className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <p className="font-medium truncate">{product.product_name}</p>
+                    </div>
+                    <Badge variant="secondary">
+                      {product.current_stock} {product.unit} left
+                    </Badge>
+                  </li>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-sm">No products are low on stock.</p>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center gap-2">
-                                <PackageX className="h-5 w-5 text-red-500" />
-                                <CardTitle>Dead Stock</CardTitle>
-                            </div>
-                            <CardDescription>Products that haven't sold in this period.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ul className="space-y-4">
-                                {deadStock.length > 0 ? deadStock.map(product => (
-                                    <li key={product.id} className="flex items-center gap-4">
-                                        <Image src={product.imageUrl} alt={product.name} width={40} height={40} className="rounded-md opacity-70" data-ai-hint={product.imageHint} />
-                                        <div className="flex-1">
-                                            <p className="font-medium truncate">{product.name}</p>
-                                            <p className="text-sm text-muted-foreground">{product.category}</p>
-                                        </div>
-                                        <Badge variant="outline">Stock: {product.stock}</Badge>
-                                    </li>
-                                )) : <p className="text-muted-foreground text-sm">No dead stock products found for this period.</p>}
-                            </ul>
-                        </CardContent>
-                    </Card>
-                </>
-            )}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <PackageX className="h-5 w-5 text-red-500" />
+              <CardTitle>Dead Stock</CardTitle>
+            </div>
+            <CardDescription>In inventory, but not sold in this period.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-4">
+              {deadStock.length > 0 ? (
+                deadStock.map((product) => (
+                  <li key={product.product_name} className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <p className="font-medium truncate">{product.product_name}</p>
+                    </div>
+                    <span className="shrink-0 text-sm font-medium text-amber-700 dark:text-amber-400">
+                      {product.current_stock} {product.unit} unsold
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-sm">No dead stock found for this period.</p>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
       </div>
 
       <h2 className="text-2xl font-bold tracking-tight">Staff Performance</h2>
@@ -490,26 +590,22 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
                 <CardTitle>Staff Leaderboard</CardTitle>
-                </div>
-                 <Select value={leaderboardTimeRange} onValueChange={setLeaderboardTimeRange}>
-                    <SelectTrigger className="w-full sm:w-[130px]">
-                        <SelectValue placeholder="Select range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="1d">Today</SelectItem>
-                        <SelectItem value="7d">This Week</SelectItem>
-                        <SelectItem value="30d">This Month</SelectItem>
-                    </SelectContent>
-                </Select>
+              </div>
+              <Select value={leaderboardTimeRange} onValueChange={setLeaderboardTimeRange}>
+                <SelectTrigger className="w-full sm:w-[130px]">
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1d">Today</SelectItem>
+                  <SelectItem value="7d">This Week</SelectItem>
+                  <SelectItem value="30d">This Month</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <CardDescription>
-              Sales and transaction performance by staff for the selected period. <br />
-              Note: "Hours Worked vs. Sales" requires timesheet data not
-              currently available.
-            </CardDescription>
+            <CardDescription>Sales and transaction performance by cashier.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -521,33 +617,33 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leaderboardData.map((staff) => (
-                  <TableRow key={staff.name}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={staff.avatarUrl} />
-                          <AvatarFallback>
-                            {staff.initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{staff.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatToPHP(staff.sales)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {staff.transactions.toLocaleString()}
+                {leaderboardData.length > 0 ? (
+                  leaderboardData.map((staff) => (
+                    <TableRow key={staff.name}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9">
+                            <AvatarFallback>{getInitials(staff.name)}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{staff.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatToPHP(staff.sales)}</TableCell>
+                      <TableCell className="text-right">{formatNumberPH(staff.transactions)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">
+                      No sales recorded for this period.
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       </div>
-
     </div>
   );
 }

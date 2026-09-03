@@ -2,7 +2,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import useMockAuth from "@/hooks/use-mock-auth";
+import { useAuth } from "@/context/auth-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/main/app-sidebar";
 import { AppHeader } from "@/components/main/app-header";
@@ -11,6 +11,7 @@ import { ProductProvider } from "@/context/product-context";
 import { SalesProvider } from "@/context/sales-context";
 import { UtangProvider } from "@/context/utang-context";
 import { ExpenseProvider } from "@/context/expense-context";
+import { DeviceProvider } from "@/context/device-context";
 import { useEffect } from "react";
 
 export default function MainAppLayout({
@@ -18,7 +19,7 @@ export default function MainAppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { status } = useMockAuth();
+  const { status } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -42,23 +43,25 @@ export default function MainAppLayout({
 
   return (
     <SettingsProvider>
-      <ProductProvider>
-        <SalesProvider>
-          <UtangProvider>
-            <ExpenseProvider>
-              <SidebarProvider>
-                <AppSidebar />
-                <div className="flex flex-col flex-1">
-                  <AppHeader />
-                  <main className="flex-1 overflow-y-auto bg-muted/30 p-4 md:p-6 lg:p-8">
-                    {children}
-                  </main>
-                </div>
-              </SidebarProvider>
-            </ExpenseProvider>
-          </UtangProvider>
-        </SalesProvider>
-      </ProductProvider>
+      <DeviceProvider>
+        <ProductProvider>
+          <SalesProvider>
+            <UtangProvider>
+              <ExpenseProvider>
+                <SidebarProvider>
+                  <AppSidebar />
+                  <div className="flex flex-col flex-1">
+                    <AppHeader />
+                    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-muted/30 p-4 md:p-6 lg:p-8">
+                      {children}
+                    </main>
+                  </div>
+                </SidebarProvider>
+              </ExpenseProvider>
+            </UtangProvider>
+          </SalesProvider>
+        </ProductProvider>
+      </DeviceProvider>
     </SettingsProvider>
   );
 }

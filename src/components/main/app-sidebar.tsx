@@ -17,7 +17,6 @@ import {
   LayoutGrid,
   ShoppingBag,
   Receipt,
-  Users,
   Settings,
   LogOut,
   AreaChart,
@@ -25,7 +24,7 @@ import {
   User as UserIcon,
   Wallet,
 } from "lucide-react";
-import useMockAuth from "@/hooks/use-mock-auth";
+import { useAuth } from "@/context/auth-context";
 import { useSettings } from "@/context/settings-context";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
@@ -39,12 +38,10 @@ import {
 import { Button } from "../ui/button";
 
 const menuItems = [
-  { href: "/pos", icon: ShoppingBag, label: "POS" },
   { href: "/dashboard", icon: AreaChart, label: "Dashboard", adminOnly: true },
   { href: "/dashboard/sales", icon: Receipt, label: "Sales History", adminOnly: true },
-  { href: "/dashboard/products", icon: LayoutGrid, label: "Products", adminOnly: true },
+  { href: "/dashboard/products", icon: LayoutGrid, label: "Inventory", adminOnly: true },
   { href: "/dashboard/expenses", icon: Wallet, label: "Expenses", adminOnly: true },
-  { href: "/dashboard/users", icon: Users, label: "Users", adminOnly: true },
 ];
 
 const utangMenuItem = { href: "/dashboard/utang", icon: BookUser, label: "Utang", adminOnly: true };
@@ -62,7 +59,7 @@ const getInitials = (name: string) => {
 export const AppSidebar = memo(function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useMockAuth();
+  const { user, logout } = useAuth();
   const { settings } = useSettings();
   const { setOpenMobile } = useSidebar();
   const isAdmin = user?.role === 'Administrator';
@@ -84,10 +81,10 @@ export const AppSidebar = memo(function AppSidebar() {
   return (
     <Sidebar className="border-r bg-sidebar text-sidebar-foreground" side="left" collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border p-2 flex justify-center">
-        <Link href="/pos" onClick={handleLinkClick}>
+        <Link href="/dashboard" onClick={handleLinkClick}>
           <div className="flex items-center gap-2 p-2 font-bold text-lg text-sidebar-accent-foreground">
              <ShoppingBag className="h-8 w-8 shrink-0" />
-             <span className="group-data-[collapsible=icon]:hidden">EYIR POS</span>
+             <span className="group-data-[collapsible=icon]:hidden">G-hub POS</span>
           </div>
         </Link>
       </SidebarHeader>

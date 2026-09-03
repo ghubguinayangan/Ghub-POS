@@ -12,13 +12,13 @@ export default function AuthLayout({
       <div className="hidden bg-muted lg:flex lg:flex-col lg:justify-between p-8">
         <Logo />
         <div className="max-w-md">
-            <h1 className="text-4xl font-bold tracking-tight">A Modern Point of Sale for Everyone</h1>
+            <h1 className="text-4xl font-bold tracking-tight">Making Every Sale Feel Easy</h1>
             <p className="mt-4 text-lg text-muted-foreground">
-                Streamline your retail operations with a fast, intuitive, and powerful POS system.
+                A simple, friendly POS system that helps G-Hub Store keep sales, inventory, and everyday tasks running smoothly.
             </p>
         </div>
         <footer className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} EYIR POS. All rights reserved.
+            © {new Date().getFullYear()} G-hub POS. All rights reserved.
         </footer>
       </div>
       <div className="flex min-h-screen items-center justify-center p-4">

@@ -4,7 +4,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import useMockAuth, { StoredUser } from "@/hooks/use-mock-auth";
+import { useAuth, Profile } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +32,7 @@ const passwordSchema = z.object({
 
 
 export default function ProfilePage() {
-    const { user, isLoading, updateCurrentUser, resetCurrentUserPassword } = useMockAuth();
+    const { user, isLoading, updateCurrentUser, resetCurrentUserPassword } = useAuth();
     const { toast } = useToast();
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
@@ -82,22 +82,22 @@ export default function ProfilePage() {
         }
     };
 
-    const onProfileSubmit = (data: z.infer<typeof profileSchema>) => {
-        const updates: Partial<StoredUser> = { name: data.name };
+    const onProfileSubmit = async (data: z.infer<typeof profileSchema>) => {
+        const updates: Partial<Pick<Profile, 'name' | 'avatarUrl'>> = { name: data.name };
         if (avatarPreview && avatarPreview !== user?.avatarUrl) {
             updates.avatarUrl = avatarPreview;
         }
 
-        const result = updateCurrentUser(updates);
+        const result = await updateCurrentUser(updates);
         if (result.success) {
             toast({ title: "Profile Updated", description: "Your profile has been successfully updated." });
         } else {
             toast({ variant: "destructive", title: "Update Failed", description: result.message });
         }
     };
-    
-    const onPasswordSubmit = (data: z.infer<typeof passwordSchema>) => {
-        const result = updateCurrentUser({ password: data.newPassword }, data.currentPassword);
+
+    const onPasswordSubmit = async (data: z.infer<typeof passwordSchema>) => {
+        const result = await updateCurrentUser({ password: data.newPassword }, data.currentPassword);
         if (result.success) {
              toast({ title: "Password Updated", description: "Your password has been successfully changed." });
              passwordForm.reset();
@@ -114,7 +114,7 @@ export default function ProfilePage() {
         }
 
         const { newPassword } = passwordForm.getValues();
-        const result = resetCurrentUserPassword(newPassword);
+        const result = await resetCurrentUserPassword(newPassword);
 
         if (result.success) {
             toast({ title: "Password Reset", description: "Your password has been successfully reset." });
@@ -175,7 +175,7 @@ export default function ProfilePage() {
                                             {getInitials(user.name)}
                                         </AvatarFallback>
                                     </Avatar>
-                                    <Label htmlFor="avatar-upload" className="absolute bottom-0 right-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/80">
+                                    <Label htmlFor="avatar-upload" className="absolute bottom-0 right-0 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/80">
                                         <Camera className="h-4 w-4" />
                                         <span className="sr-only">Change profile picture</span>
                                     </Label>

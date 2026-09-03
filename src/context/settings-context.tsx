@@ -5,31 +5,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 // Define the shape of your settings
+// Note: this website only ever reads synced data from Supabase - there is no
+// sync-back path to the mobile app (see src/lib/ghub-data.ts). So this only
+// holds settings that affect the WEBSITE itself, not the mobile POS app.
 interface AppSettings {
-  showStockOnPOS: boolean;
   lowStockThreshold: number;
   primaryColor: string;
-  storeName: string;
-  storeAddress: string;
-  storePhone: string;
-  storeTIN: string;
-  storeLogo: string | null;
-  receiptFooter: string;
-  gcashName: string;
-  gcashNumber: string;
-  gcashQRCode: string | null;
-  paymayaName: string;
-  paymayaNumber: string;
-  paymayaQRCode: string | null;
-  bankName: string;
-  accountName: string;
-  accountNumber: string;
   enableUtangManagement: boolean;
-  showPriceOnPOS: boolean;
-  showImageOnPOS: boolean;
   enableStockTracking: boolean;
-  autoPrintReceipt: boolean;
-  autoOpenDrawer: boolean;
 }
 
 // Define the shape of the context value
@@ -72,30 +55,10 @@ function hexToHsl(hex: string): { h: number, s: number, l: number } | null {
 
 // Default settings
 const defaultSettings: AppSettings = {
-  showStockOnPOS: false,
   lowStockThreshold: 10,
   primaryColor: '#008080', // Default from settings page
-  storeName: 'My Awesome Store',
-  storeAddress: '',
-  storePhone: '',
-  storeTIN: '',
-  storeLogo: null,
-  receiptFooter: 'Thank you for shopping! Please come again.',
-  gcashName: '',
-  gcashNumber: '',
-  gcashQRCode: null,
-  paymayaName: '',
-  paymayaNumber: '',
-  paymayaQRCode: null,
-  bankName: '',
-  accountName: '',
-  accountNumber: '',
   enableUtangManagement: false,
-  showPriceOnPOS: true,
-  showImageOnPOS: true,
   enableStockTracking: true,
-  autoPrintReceipt: true,
-  autoOpenDrawer: true,
 };
 
 // Create the context

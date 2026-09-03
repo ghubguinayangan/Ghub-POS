@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -17,9 +17,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { formatToPHP } from "@/lib/currency";
 import { Input } from '@/components/ui/input';
-import { MoreHorizontal, Search, Undo2 } from 'lucide-react';
+import { CloudOff, RefreshCw, Search, Package } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -27,148 +34,194 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Sale } from '@/lib/placeholder-data';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { RefundDialog } from '@/components/sales/refund-dialog';
-import { useProducts } from '@/context/product-context';
-import { useSales } from '@/context/sales-context';
-import { useToast } from '@/hooks/use-toast';
-import { useSettings } from '@/context/settings-context';
+import { useDevice } from '@/context/device-context';
+import { DeviceSelect } from '@/components/main/device-select';
+import { getSales, getUsers, localDateKey, type SaleRow, type GhubUserRow } from '@/lib/ghub-data';
+import { formatDateTimePH } from '@/lib/date';
+
+type PeriodPreset = "7d" | "30d" | "90d" | "all";
+
+function toDateKey(d: Date): string {
+  return localDateKey(d);
+}
+
+function daysAgoKey(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - (days - 1));
+  return toDateKey(d);
+}
+
+function getPeriodRange(preset: PeriodPreset): { start: string; end: string } {
+  const end = toDateKey(new Date());
+  if (preset === "all") return { start: "2000-01-01", end };
+  const days = preset === "7d" ? 7 : preset === "30d" ? 30 : 90;
+  return { start: daysAgoKey(days), end };
+}
+
+function paymentLabel(method: string): string {
+  switch (method) {
+    case 'cash': return 'Cash';
+    case 'gcash': return 'GCash';
+    case 'paymaya': return 'PayMaya';
+    case 'bank_transfer': return 'Bank Transfer';
+    case 'card': return 'Card';
+    case 'utang': return 'Utang';
+    default: return method || 'Unknown';
+  }
+}
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'refunded': return 'Refunded';
+    case 'pending': return 'Pending';
+    default: return 'Completed';
+  }
+}
+
+function statusBadgeVariant(status: string): 'secondary' | 'outline' | 'destructive' {
+  switch (status) {
+    case 'refunded': return 'destructive';
+    case 'pending': return 'outline';
+    default: return 'secondary';
+  }
+}
 
 export default function SalesPage() {
-  const { sales, setSales } = useSales();
-  const { setProducts } = useProducts();
-  const { toast } = useToast();
-  const { settings } = useSettings();
+  const { selectedDeviceId, deviceIds, isLoading: deviceLoading } = useDevice();
+
+  const [period, setPeriod] = useState<PeriodPreset>("30d");
+  const [sales, setSales] = useState<SaleRow[]>([]);
+  const [users, setUsers] = useState<GhubUserRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCashier, setSelectedCashier] = useState('All');
   const [selectedPayment, setSelectedPayment] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
-  const [isRefundDialogOpen, setRefundDialogOpen] = useState(false);
-  const [selectedSaleForRefund, setSelectedSaleForRefund] = useState<Sale | null>(null);
+  const [selectedSale, setSelectedSale] = useState<SaleRow | null>(null);
 
-  const cashiers = useMemo(() => ["All", ...Array.from(new Set(sales.map(s => s.cashier)))], [sales]);
-  const paymentMethods = useMemo(() => ["All", "Cash", "GCash", "PayMaya", "Bank", "Utang"], []);
-  const statuses = useMemo(() => ["All", "Completed", "Partially Refunded", "Refunded"], []);
+  const load = useCallback(async () => {
+    if (!selectedDeviceId) {
+      setSales([]);
+      setUsers([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    const { start, end } = getPeriodRange(period);
+    const [salesRows, userRows] = await Promise.all([
+      getSales(selectedDeviceId, start, end),
+      getUsers(selectedDeviceId),
+    ]);
+    setSales(salesRows);
+    setUsers(userRows);
+    setIsLoading(false);
+  }, [selectedDeviceId, period]);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const cashierName = useMemo(() => {
+    const byId = new Map(users.map((u) => [u.user_id, u.full_name || u.username || u.user_id]));
+    return (cashierId: string | null) => (cashierId ? byId.get(cashierId) || cashierId : 'Unknown');
+  }, [users]);
+
+  const cashiers = useMemo(
+    () => ["All", ...Array.from(new Set(sales.map((s) => cashierName(s.cashier_id))))],
+    [sales, cashierName]
+  );
+  const paymentMethods = useMemo(
+    () => ["All", ...Array.from(new Set(sales.map((s) => paymentLabel(s.payment_method))))],
+    [sales]
+  );
+  const statuses = ["All", "Completed", "Pending", "Refunded"];
 
   const filteredSales = useMemo(() => {
     let results = sales;
 
     if (selectedCashier !== 'All') {
-      results = results.filter(s => s.cashier === selectedCashier);
+      results = results.filter((s) => cashierName(s.cashier_id) === selectedCashier);
     }
-
     if (selectedPayment !== 'All') {
-      results = results.filter(s => s.paymentMethod === selectedPayment);
+      results = results.filter((s) => paymentLabel(s.payment_method) === selectedPayment);
     }
-
     if (selectedStatus !== 'All') {
-      results = results.filter(s => s.status === selectedStatus);
+      results = results.filter((s) => statusLabel(s.payment_status) === selectedStatus);
     }
-    
     if (searchQuery) {
-      const lowercasedQuery = searchQuery.toLowerCase();
-      results = results.filter(sale => 
-        sale.id.toLowerCase().includes(lowercasedQuery) ||
-        sale.date.toLocaleDateString().toLowerCase().includes(lowercasedQuery) ||
-        sale.cashier.toLowerCase().includes(lowercasedQuery) ||
-        sale.paymentMethod.toLowerCase().includes(lowercasedQuery) ||
-        sale.total.toString().includes(lowercasedQuery)
+      const q = searchQuery.toLowerCase();
+      results = results.filter((sale) =>
+        (sale.sale_number || sale.sale_id).toLowerCase().includes(q) ||
+        (sale.sale_date || '').toLowerCase().includes(q) ||
+        cashierName(sale.cashier_id).toLowerCase().includes(q) ||
+        paymentLabel(sale.payment_method).toLowerCase().includes(q) ||
+        String(sale.total_amount).includes(q)
       );
     }
-    
-    return results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  }, [searchQuery, selectedCashier, selectedPayment, selectedStatus, sales]);
+    return [...results].sort(
+      (a, b) => new Date(b.created_at || b.sale_date || 0).getTime() - new Date(a.created_at || a.sale_date || 0).getTime()
+    );
+  }, [searchQuery, selectedCashier, selectedPayment, selectedStatus, sales, cashierName]);
 
-  const handleRefundClick = (sale: Sale) => {
-    if (sale.status === 'Refunded') {
-        toast({
-            variant: "destructive",
-            title: "Already Refunded",
-            description: "This transaction has already been fully refunded.",
-        });
-        return;
-    }
-    setSelectedSaleForRefund(sale);
-    setRefundDialogOpen(true);
-  };
-
-  const handleConfirmRefund = (saleToRefund: Sale, itemsToRefund: { productId: string, quantity: number, price: number }[], reason: string) => {
-    // 1. Update product stock if stock tracking is enabled
-    if (settings.enableStockTracking) {
-        setProducts(currentProducts => {
-            const updatedProducts = [...currentProducts];
-            itemsToRefund.forEach(refundItem => {
-                const productIndex = updatedProducts.findIndex(p => p.id === refundItem.productId);
-                if (productIndex !== -1) {
-                    updatedProducts[productIndex].stock += refundItem.quantity;
-                }
-            });
-            return updatedProducts;
-        });
-    }
-
-    const refundAmount = itemsToRefund.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-
-    // 2. Update sale status
-    setSales(currentSales => currentSales.map(s => {
-        if (s.id === saleToRefund.id) {
-            const newRefundedAmount = (s.refundedAmount || 0) + refundAmount;
-            
-            // A full refund is when the refunded amount is equal to or greater than the original total (with a small tolerance)
-            const isFullRefund = newRefundedAmount >= (s.total - 0.01);
-
-            return {
-                ...s,
-                status: isFullRefund ? 'Refunded' : 'Partially Refunded',
-                refundedAmount: newRefundedAmount,
-            };
-        }
-        return s;
-    }));
-
-    toast({
-        title: "Refund Processed",
-        description: `${formatToPHP(refundAmount)} has been refunded. Reason: ${reason}.`,
-    });
-    setRefundDialogOpen(false);
-  };
-
-  const getBadgeVariant = (status: Sale['status']): 'secondary' | 'outline' | 'destructive' | 'default' => {
-      switch (status) {
-          case 'Completed': return 'secondary';
-          case 'Partially Refunded': return 'outline';
-          case 'Refunded': return 'destructive';
-          default: return 'secondary';
-      }
+  if (!deviceLoading && deviceIds.length === 0) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
+        <CloudOff className="h-10 w-10 text-muted-foreground" />
+        <h2 className="text-xl font-semibold">No synced data yet</h2>
+        <p className="max-w-md text-sm text-muted-foreground">
+          This page mirrors the sales recorded in the G-hub POS mobile app. Open the app, go to
+          Settings → Cloud Sync, and run a sync at least once — sales will appear here automatically.
+        </p>
+      </div>
+    );
   }
 
   return (
-    <>
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Sales History</h1>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Sales History</h1>
+          <p className="text-muted-foreground">Read-only view of the sales synced from your mobile app.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <DeviceSelect />
+          <Button variant="outline" size="icon" className="h-11 w-11" onClick={load} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      </div>
 
       <Card>
         <CardHeader>
           <CardTitle>All Transactions</CardTitle>
           <CardDescription>
-            Search, filter, and review all sales recorded in the system.
+            Search, filter, and review all sales synced from the mobile app.
           </CardDescription>
            <div className="mt-4 flex flex-col gap-4 sm:flex-row flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="AI Search (e.g., 'sales by Jane last Tuesday')"
+                placeholder="Search by transaction, date, cashier, payment, amount"
                 className="w-full rounded-lg bg-background pl-8"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            <Select value={period} onValueChange={(v) => setPeriod(v as PeriodPreset)}>
+              <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectValue placeholder="Period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+                <SelectItem value="90d">Last 90 Days</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={selectedCashier} onValueChange={setSelectedCashier}>
               <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="Filter by Cashier" />
@@ -210,56 +263,47 @@ export default function SalesPage() {
                 <TableHead className="hidden md:table-cell">Payment</TableHead>
                 <TableHead className="hidden md:table-cell">Status</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredSales.length > 0 ? filteredSales.map((sale) => (
-                <TableRow key={sale.id}>
+                <TableRow
+                  key={sale.sale_id}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedSale(sale)}
+                >
                     <TableCell>
-                        <div className="font-mono text-xs font-semibold">{sale.id}</div>
-                        <div className="text-sm text-muted-foreground">{sale.date.toLocaleString()}</div>
+                        <div className="font-mono text-xs font-semibold">{sale.sale_number || sale.sale_id}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {sale.created_at ? formatDateTimePH(sale.created_at) : sale.sale_date}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <Package className="h-3 w-3" />
+                          {sale.items_sold?.length
+                            ? `${sale.items_sold.length} item${sale.items_sold.length > 1 ? 's' : ''} - tap to view`
+                            : 'No item details'}
+                        </div>
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell">{sale.cashier}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{cashierName(sale.cashier_id)}</TableCell>
                     <TableCell className="hidden md:table-cell">
-                        <Badge variant={sale.paymentMethod === 'Cash' ? 'secondary' : 'outline'}>
-                        {sale.paymentMethod}
+                        <Badge variant={sale.payment_method === 'cash' ? 'secondary' : 'outline'}>
+                        {paymentLabel(sale.payment_method)}
                         </Badge>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                        <Badge variant={getBadgeVariant(sale.status)}>{sale.status}</Badge>
+                        <Badge variant={statusBadgeVariant(sale.payment_status)}>{statusLabel(sale.payment_status)}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                        <div className="font-medium">{formatToPHP(sale.total)}</div>
-                        {sale.refundedAmount ? (
-                            <div className="text-xs text-destructive">{`-${formatToPHP(sale.refundedAmount)}`}</div>
-                        ) : null}
+                        <div className="font-medium">{formatToPHP(sale.total_amount)}</div>
                          <div className="text-xs text-muted-foreground md:hidden">
-                            <Badge variant={getBadgeVariant(sale.status)}>{sale.status}</Badge>
+                            <Badge variant={statusBadgeVariant(sale.payment_status)}>{statusLabel(sale.payment_status)}</Badge>
                          </div>
                     </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onSelect={() => handleRefundClick(sale)}>
-                            <Undo2 className="mr-2 h-4 w-4" />
-                            Refund
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
-                    No results found.
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    {isLoading ? "Loading..." : "No results found."}
                   </TableCell>
                 </TableRow>
               )}
@@ -267,15 +311,50 @@ export default function SalesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedSale} onOpenChange={(open) => !open && setSelectedSale(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono">
+              {selectedSale?.sale_number || selectedSale?.sale_id}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedSale?.created_at
+                ? formatDateTimePH(selectedSale.created_at)
+                : selectedSale?.sale_date}
+              {' - '}
+              {cashierName(selectedSale?.cashier_id ?? null)}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {selectedSale?.items_sold?.length ? (
+              <div className="rounded-md border divide-y">
+                {selectedSale.items_sold.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <div>
+                      <div className="font-medium">{item.product}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {item.qty} x {formatToPHP(item.price)}
+                      </div>
+                    </div>
+                    <div className="font-medium">{formatToPHP(item.qty * item.price)}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No item details were synced for this sale.
+              </p>
+            )}
+
+            <div className="flex items-center justify-between border-t pt-3 font-semibold">
+              <span>Total</span>
+              <span>{selectedSale ? formatToPHP(selectedSale.total_amount) : ''}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
-    {selectedSaleForRefund && (
-        <RefundDialog
-            isOpen={isRefundDialogOpen}
-            onOpenChange={setRefundDialogOpen}
-            sale={selectedSaleForRefund}
-            onConfirmRefund={handleConfirmRefund}
-        />
-    )}
-    </>
   );
 }

@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Label } from "../ui/label";
 import { useExpenses, type Expense, type ExpenseCategory } from "@/context/expense-context";
-import useMockAuth from "@/hooks/use-mock-auth";
+import { useAuth } from "@/context/auth-context";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -58,7 +58,7 @@ interface AddExpenseDialogProps {
 }
 
 export function AddExpenseDialog({ isOpen, onOpenChange }: AddExpenseDialogProps) {
-  const { user } = useMockAuth();
+  const { user } = useAuth();
   const { setExpenses, expenseCategories } = useExpenses();
   const { toast } = useToast();
   
@@ -133,7 +133,7 @@ export function AddExpenseDialog({ isOpen, onOpenChange }: AddExpenseDialogProps
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-             <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
                     control={form.control}
                     name="category"
@@ -170,7 +170,7 @@ export function AddExpenseDialog({ isOpen, onOpenChange }: AddExpenseDialogProps
                     )}
                 />
             </div>
-             <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                  <FormField
                     control={form.control}
                     name="date"
@@ -254,7 +254,7 @@ export function AddExpenseDialog({ isOpen, onOpenChange }: AddExpenseDialogProps
                 {imagePreview ? (
                     <div className="relative w-full aspect-video rounded-md border">
                         <Image src={imagePreview} alt="Receipt preview" fill className="object-contain rounded-md" />
-                        <Button size="icon" variant="destructive" className="absolute top-1 right-1 h-7 w-7" onClick={clearImage}>
+                        <Button size="icon" variant="destructive" className="absolute top-1 right-1 flex h-11 w-11" onClick={clearImage}>
                             <X className="h-4 w-4"/>
                         </Button>
                     </div>

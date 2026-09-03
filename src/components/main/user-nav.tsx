@@ -13,11 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import useMockAuth from "@/hooks/use-mock-auth";
+import { useAuth } from "@/context/auth-context";
 import { LogOut, User as UserIcon } from "lucide-react";
 
 export function UserNav() {
-  const { user, logout } = useMockAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
 
   if (!user) return null;

@@ -209,7 +209,7 @@ export function EditProductDialog({ isOpen, onOpenChange, categories, onProductU
                        {imagePreview ? (
                            <div className="relative w-full aspect-square rounded-md border">
                                <Image src={imagePreview} alt="Product preview" fill className="object-contain rounded-md" />
-                               <Button size="icon" variant="destructive" className="absolute top-1 right-1 h-7 w-7" onClick={clearImage}>
+                                <Button size="icon" variant="destructive" className="absolute top-1 right-1 flex h-11 w-11" onClick={clearImage}>
                                    <X className="h-4 w-4"/>
                                </Button>
                            </div>
@@ -281,7 +281,7 @@ export function EditProductDialog({ isOpen, onOpenChange, categories, onProductU
                     </FormItem>
                 )}
             />
-             <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
                 control={form.control}
                 name="price"

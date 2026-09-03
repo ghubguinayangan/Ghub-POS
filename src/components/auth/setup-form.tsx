@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import useMockAuth from "@/hooks/use-mock-auth";
+import { useAuth } from "@/context/auth-context";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/logo";
 
@@ -30,9 +30,20 @@ const formSchema = z.object({
 export function SetupForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const { setupAdmin } = useMockAuth();
+  const { setupAdmin, hasAdminAccount, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // /setup only ever creates the FIRST account. Once any account exists,
+  // this page must not be usable again — otherwise visiting it directly
+  // (bookmark, typed URL, old tab) lets anyone mint a brand-new admin
+  // account on top of whatever already exists, bypassing the Users page's
+  // account limit entirely.
+  useEffect(() => {
+    if (!authLoading && hasAdminAccount) {
+      router.replace("/login");
+    }
+  }, [authLoading, hasAdminAccount, router]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -45,18 +56,18 @@ export function SetupForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    const success = await setupAdmin(values.name, values.email, values.password);
-    if (success) {
+    const result = await setupAdmin(values.name, values.email, values.password);
+    if (result.success) {
       toast({
         title: "Setup Complete",
         description: "Administrator account created successfully.",
       });
-      router.push("/pos");
+      router.push("/dashboard");
     } else {
       toast({
         variant: "destructive",
         title: "Setup Failed",
-        description: "Could not create administrator account.",
+        description: result.message || "Could not create administrator account.",
       });
     }
     setIsLoading(false);
@@ -68,7 +79,7 @@ export function SetupForm() {
             <Logo className="mx-auto" />
         </div>
         <div className="text-center space-y-2">
-            <h1 className="text-2xl font-bold">Welcome to EYIR POS</h1>
+            <h1 className="text-2xl font-bold">Welcome to G-hub POS</h1>
             <p className="text-muted-foreground">
                 Let's set up your administrator account to get started.
             </p>
@@ -118,7 +129,7 @@ export function SetupForm() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />

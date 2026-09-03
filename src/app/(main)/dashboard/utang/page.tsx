@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatToPHP } from "@/lib/currency";
+import { formatDatePH } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Search, FileDown, Upload } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -166,7 +167,7 @@ export default function UtangPage() {
                         <h1 className="text-3xl font-bold tracking-tight">Utang Management</h1>
                         <p className="text-muted-foreground">Track, export, and manage all outstanding debts.</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                         <Button variant="outline" onClick={handleExport}>
                             <FileDown className="mr-2 h-4 w-4" />
                             Export Records
@@ -212,7 +213,7 @@ export default function UtangPage() {
                             <TableBody>
                                 {filteredDebts.length > 0 ? filteredDebts.map((debt) => (
                                     <TableRow key={debt.id}>
-                                        <TableCell className="hidden sm:table-cell">{debt.date.toLocaleDateString()}</TableCell>
+                                        <TableCell className="hidden sm:table-cell">{formatDatePH(debt.date)}</TableCell>
                                         <TableCell>
                                             <div className="font-medium">{debt.debtorName}</div>
                                             <div className="text-sm text-muted-foreground md:hidden">
@@ -221,7 +222,7 @@ export default function UtangPage() {
                                                 </a>
                                             </div>
                                             <div className="text-xs text-muted-foreground sm:hidden">
-                                                {debt.date.toLocaleDateString()}
+                                                {formatDatePH(debt.date)}
                                             </div>
                                         </TableCell>
                                         <TableCell className="hidden md:table-cell">
