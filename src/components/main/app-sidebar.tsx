@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Sidebar,
   SidebarContent,
@@ -72,24 +73,46 @@ export const AppSidebar = memo(function AppSidebar() {
     router.push('/dashboard/profile');
     setOpenMobile(false);
   }
-  
+
   const handleLogout = () => {
     logout();
     setOpenMobile(false);
   }
 
   return (
-    <Sidebar className="border-r bg-sidebar text-sidebar-foreground" side="left" collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border p-2 flex justify-center">
+    <Sidebar className="border-r border-sidebar-border" side="left" collapsible="icon">
+      <SidebarHeader className="p-3">
         <Link href="/dashboard" onClick={handleLinkClick}>
-          <div className="flex items-center gap-2 p-2 font-bold text-lg text-sidebar-accent-foreground">
-             <ShoppingBag className="h-8 w-8 shrink-0" />
-             <span className="group-data-[collapsible=icon]:hidden">G-hub POS</span>
+          <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-white/10 hover:bg-white/15 transition-colors">
+            <div className="relative flex-shrink-0">
+              <Image
+                src="/ghublogo.jpg"
+                alt="G-hub POS"
+                width={36}
+                height={36}
+                className="rounded-lg object-cover"
+                priority
+              />
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-sidebar-background" />
+            </div>
+            <div className="group-data-[collapsible=icon]:hidden">
+              <span className="font-bold text-base text-sidebar-foreground tracking-tight block leading-tight">
+                G-hub <span className="text-white/60">POS</span>
+              </span>
+              <span className="text-[10px] text-sidebar-foreground/50 font-medium uppercase tracking-widest">
+                Point of Sale
+              </span>
+            </div>
           </div>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="flex-1 p-2">
+      <SidebarContent className="flex-1 px-2 py-2">
+        <div className="group-data-[collapsible=icon]:hidden px-2 py-1.5">
+          <span className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-widest">
+            Menu
+          </span>
+        </div>
         <SidebarMenu>
           {menuItems.map((item) => (
             (!item.adminOnly || isAdmin) && (
@@ -98,10 +121,11 @@ export const AppSidebar = memo(function AppSidebar() {
                   asChild
                   isActive={pathname === item.href}
                   tooltip={item.label}
+                  className="h-10 rounded-lg transition-all duration-200"
                 >
                   <Link href={item.href} onClick={handleLinkClick}>
-                    <item.icon />
-                    <span>{item.label}</span>
+                    <item.icon className="h-4 w-4" />
+                    <span className="font-medium">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -113,18 +137,19 @@ export const AppSidebar = memo(function AppSidebar() {
                   asChild
                   isActive={pathname === utangMenuItem.href}
                   tooltip={utangMenuItem.label}
+                  className="h-10 rounded-lg transition-all duration-200"
                 >
                   <Link href={utangMenuItem.href} onClick={handleLinkClick}>
-                    <utangMenuItem.icon />
-                    <span>{utangMenuItem.label}</span>
+                    <utangMenuItem.icon className="h-4 w-4" />
+                    <span className="font-medium">{utangMenuItem.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
           )}
         </SidebarMenu>
       </SidebarContent>
-      
-      <SidebarFooter className="p-2 border-t border-sidebar-border flex flex-col gap-2">
+
+      <SidebarFooter className="p-2 border-t border-sidebar-border">
         <SidebarMenu>
             {isAdmin && (
                 <SidebarMenuItem>
@@ -132,10 +157,11 @@ export const AppSidebar = memo(function AppSidebar() {
                         asChild
                         isActive={pathname === settingsMenuItem.href}
                         tooltip={settingsMenuItem.label}
+                        className="h-10 rounded-lg transition-all duration-200"
                         >
                         <Link href={settingsMenuItem.href} onClick={handleLinkClick}>
-                            <settingsMenuItem.icon />
-                            <span>{settingsMenuItem.label}</span>
+                            <settingsMenuItem.icon className="h-4 w-4" />
+                            <span className="font-medium">{settingsMenuItem.label}</span>
                         </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -145,14 +171,14 @@ export const AppSidebar = memo(function AppSidebar() {
         {user && (
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="flex items-center justify-start gap-3 p-2 h-auto w-full rounded-lg hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:h-auto">
-                         <Avatar className="h-9 w-9 border border-sidebar-border">
+                    <Button variant="ghost" className="flex items-center justify-start gap-3 p-2.5 h-auto w-full rounded-xl hover:bg-white/10 mt-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:h-auto transition-colors">
+                         <Avatar className="h-9 w-9 border-2 border-white/20">
                             <AvatarImage src={user.avatarUrl} alt={user.name} />
-                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                            <AvatarFallback className="bg-white/10 text-white text-xs font-semibold">{getInitials(user.name)}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col items-start overflow-hidden group-data-[collapsible=icon]:hidden">
-                            <span className="font-semibold text-sm truncate text-sidebar-accent-foreground">{user.name}</span>
-                            <span className="text-xs text-muted-foreground truncate">{user.role}</span>
+                            <span className="font-semibold text-sm text-sidebar-foreground truncate">{user.name}</span>
+                            <span className="text-xs text-sidebar-foreground/50 truncate">{user.role}</span>
                         </div>
                     </Button>
                 </DropdownMenuTrigger>

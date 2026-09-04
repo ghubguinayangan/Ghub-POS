@@ -30,12 +30,12 @@
     --chart-5: 280 70% 60%;
     --radius: 0.5rem;
 
-    /* Sidebar variables - Modern Dark Look */
-    --sidebar-background: 224 71% 10%; /* Dark blue-gray */
-    --sidebar-foreground: 208 60% 85%; /* Lighter gray for text */
-    --sidebar-border: 224 71% 15%;
-    --sidebar-accent: 224 71% 15%; /* Darker hover */
-    --sidebar-accent-foreground: 208 60% 98%; /* White text on hover/active */
+    /* Sidebar variables - Brand Match */
+    --sidebar-background: 7 45% 15%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-border: 7 40% 22%;
+    --sidebar-accent: 7 50% 22%;
+    --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-ring: 7 91% 50%;
   }
 
@@ -65,12 +65,12 @@
     --chart-4: 0 60% 55%;
     --chart-5: 280 60% 60%;
 
-    /* Sidebar variables - Modern Dark Look */
-    --sidebar-background: 224 71% 10%;
-    --sidebar-foreground: 208 60% 85%;
-    --sidebar-border: 224 71% 15%;
-    --sidebar-accent: 224 71% 15%;
-    --sidebar-accent-foreground: 208 60% 98%;
+    /* Sidebar variables - Brand Match Dark */
+    --sidebar-background: 7 40% 12%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-border: 7 35% 18%;
+    --sidebar-accent: 7 45% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-ring: 7 91% 50%;
   }
 }

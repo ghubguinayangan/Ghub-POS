@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Palette, Trash2, BookUser, BookCopy, AlertTriangle, Loader2, ShieldQuestion } from 'lucide-react';
+import { Trash2, BookCopy, AlertTriangle, Loader2, ShieldQuestion, UserCog, Eye, EyeOff } from 'lucide-react';
 import { useSettings } from '@/context/settings-context';
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,6 +29,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 
 
@@ -41,6 +48,15 @@ export default function SettingsPage() {
     const [securityQuestion, setSecurityQuestion] = useState('');
     const [securityAnswer, setSecurityAnswer] = useState('');
     const [isSavingSecurity, setIsSavingSecurity] = useState(false);
+    const [adminName, setAdminName] = useState('');
+    const [adminEmail, setAdminEmail] = useState('');
+    const [adminPassword, setAdminPassword] = useState('');
+    const [isSavingAdmin, setIsSavingAdmin] = useState(false);
+    const [showAdminPassword, setShowAdminPassword] = useState(false);
+    const [adminNewPassword, setAdminNewPassword] = useState('');
+    const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -56,8 +72,46 @@ export default function SettingsPage() {
                 }
             };
             loadSecurity();
+            setAdminName(user.name || '');
+            setAdminEmail(user.email || '');
         }
     }, [user]);
+
+    const { updateCurrentUser } = useAuth();
+
+    const handleSaveAdmin = async () => {
+        if (!adminName.trim()) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Name is required.' });
+            return;
+        }
+        if (!adminPassword) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Current password is required to save changes.' });
+            return;
+        }
+        if (adminNewPassword && adminNewPassword !== adminConfirmPassword) {
+            toast({ variant: 'destructive', title: 'Error', description: 'New passwords do not match.' });
+            return;
+        }
+        if (adminNewPassword && adminNewPassword.length < 8) {
+            toast({ variant: 'destructive', title: 'Error', description: 'New password must be at least 8 characters.' });
+            return;
+        }
+        setIsSavingAdmin(true);
+        const updates: any = { name: adminName.trim(), email: adminEmail.trim() };
+        if (adminNewPassword) {
+            updates.password = adminNewPassword;
+        }
+        const result = await updateCurrentUser(updates, adminPassword);
+        setIsSavingAdmin(false);
+        if (result.success) {
+            toast({ title: 'Account Updated', description: 'Your account details have been updated.' });
+            setAdminPassword('');
+            setAdminNewPassword('');
+            setAdminConfirmPassword('');
+        } else {
+            toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
+        }
+    };
 
     const handleSaveSecurity = async () => {
         if (!securityQuestion.trim() || !securityAnswer.trim()) {
@@ -165,61 +219,97 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
             <div className="flex items-center gap-3">
-                <Palette className="h-6 w-6" />
-                <CardTitle>Appearance</CardTitle>
+                <UserCog className="h-6 w-6" />
+                <CardTitle>Admin Account</CardTitle>
             </div>
             <CardDescription>
-                Customize the look and feel of this dashboard.
+                Update your admin name, email, and password used for login.
             </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
             <div className="space-y-2">
-                <Label>Primary Color</Label>
-                <div className="flex items-center gap-2">
+                <Label htmlFor="admin-name">Name</Label>
+                <Input
+                    id="admin-name"
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="admin-email">Email (Login)</Label>
+                <Input
+                    id="admin-email"
+                    type="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="admin-password">Current Password</Label>
+                <div className="relative">
                     <Input
-                        type="color"
-                        value={settings.primaryColor}
-                        onChange={(e) => setSettings({ primaryColor: e.target.value })}
-                        className="h-10 w-12 cursor-pointer p-1"
+                        id="admin-password"
+                        type={showAdminPassword ? "text" : "password"}
+                        placeholder="Required to save changes"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="pr-10"
                     />
-                    <div className="relative flex-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">#</span>
-                        <Input
-                            value={settings.primaryColor.substring(1)}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                if (/^[0-9a-f]{0,6}$/i.test(value)) {
-                                    setSettings({ primaryColor: `#${value}`});
-                                }
-                            }}
-                            className="pl-7"
-                            maxLength={6}
-                        />
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowAdminPassword(!showAdminPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        {showAdminPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                 </div>
-                 <p className="text-sm text-muted-foreground">Color changes are applied globally in real-time.</p>
             </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-            <div className="flex items-center gap-3">
-                <BookUser className="h-6 w-6" />
-                <CardTitle>Feature Management</CardTitle>
-            </div>
-            <CardDescription>
-                Show or hide optional sections of this dashboard.
-            </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-            <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                    <Label>Utang Management</Label>
-                    <p className="text-sm text-muted-foreground">Show the Utang (debt tracking) page in the sidebar.</p>
+            <div className="space-y-2">
+                <Label htmlFor="admin-new-password">New Password (optional)</Label>
+                <div className="relative">
+                    <Input
+                        id="admin-new-password"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="Leave blank to keep current"
+                        value={adminNewPassword}
+                        onChange={(e) => setAdminNewPassword(e.target.value)}
+                        className="pr-10"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                 </div>
-                <Switch checked={settings.enableUtangManagement} onCheckedChange={(checked) => setSettings({ enableUtangManagement: checked })} />
             </div>
+            <div className="space-y-2">
+                <Label htmlFor="admin-confirm-password">Confirm New Password</Label>
+                <div className="relative">
+                    <Input
+                        id="admin-confirm-password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm new password"
+                        value={adminConfirmPassword}
+                        onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                        className="pr-10"
+                        disabled={!adminNewPassword}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        disabled={!adminNewPassword}
+                    >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                </div>
+            </div>
+            <Button onClick={handleSaveAdmin} disabled={isSavingAdmin}>
+                {isSavingAdmin && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Account Changes
+            </Button>
         </CardContent>
       </Card>
 
@@ -236,12 +326,21 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="security-question">Security Question</Label>
-                <Input
-                    id="security-question"
-                    placeholder="e.g. What is your mother's maiden name?"
-                    value={securityQuestion}
-                    onChange={(e) => setSecurityQuestion(e.target.value)}
-                />
+                <Select value={securityQuestion} onValueChange={setSecurityQuestion}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select a security question" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="What is your mother's maiden name?">What is your mother&apos;s maiden name?</SelectItem>
+                        <SelectItem value="What was the name of your first pet?">What was the name of your first pet?</SelectItem>
+                        <SelectItem value="What city were you born in?">What city were you born in?</SelectItem>
+                        <SelectItem value="What is the name of your favorite teacher?">What is the name of your favorite teacher?</SelectItem>
+                        <SelectItem value="What was the make of your first car?">What was the make of your first car?</SelectItem>
+                        <SelectItem value="What is your favorite food?">What is your favorite food?</SelectItem>
+                        <SelectItem value="What street did you grow up on?">What street did you grow up on?</SelectItem>
+                        <SelectItem value="What is your favorite movie?">What is your favorite movie?</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="security-answer">Answer</Label>

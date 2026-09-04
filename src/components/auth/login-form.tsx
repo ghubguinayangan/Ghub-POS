@@ -17,8 +17,10 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
-import { Loader2, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Loader2, Eye, EyeOff, ShieldCheck, Mail, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
 import Logo from "@/components/logo";
 import {
   Dialog,
@@ -121,146 +123,197 @@ export function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-2 lg:hidden">
-            <Logo className="mx-auto" />
-        </div>
-        <div className="text-center space-y-2">
-            <h1 className="text-2xl font-bold">Login</h1>
-            <p className="text-muted-foreground">
-                Enter your email to login to your account.
+    <>
+      <div className="text-center space-y-2 lg:hidden">
+        <Logo className="mx-auto" />
+      </div>
+
+      <Card className="border-0 shadow-xl shadow-primary/5 bg-card/80 backdrop-blur-sm">
+        <CardContent className="p-8">
+          <div className="space-y-1 text-center mb-8">
+            <div className="hidden lg:flex justify-center mb-4">
+              <Logo />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+            <p className="text-sm text-muted-foreground">
+              Sign in to your account to continue
             </p>
-        </div>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="admin@eyir.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        {...field}
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Login
-            </Button>
-            <div className="text-center">
+          </div>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Email</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="admin@eyir.com"
+                          {...field}
+                          className="pl-10 h-11 bg-background/50"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Password</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Enter your password"
+                          {...field}
+                          className="pl-10 pr-10 h-11 bg-background/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" className="w-full h-11 font-medium" disabled={isLoading}>
+                {isLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </form>
+          </Form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <Separator />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">or</span>
+              </div>
+            </div>
+            <div className="mt-4 text-center">
               <button
                 type="button"
                 onClick={() => setShowForgot(true)}
-                className="text-sm text-primary hover:underline"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1.5"
               >
+                <ShieldCheck className="h-3.5 w-3.5" />
                 Forgot Password?
               </button>
             </div>
-          </form>
-        </Form>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Dialog open={showForgot} onOpenChange={setShowForgot}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5" />
-                Reset Password
-              </DialogTitle>
-              <DialogDescription>
-                {forgotStep === "email" && "Enter your email address to begin password recovery."}
-                {forgotStep === "question" && "Answer the security question to reset your password."}
-                {forgotStep === "done" && "Your password has been changed. You can now log in with your new password."}
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...forgotForm}>
-              <form onSubmit={forgotForm.handleSubmit(handleForgotSubmit)} className="space-y-4">
-                {forgotStep === "email" && (
+      <p className="text-center text-xs text-muted-foreground mt-6">
+        &copy; {new Date().getFullYear()} G-hub POS. All rights reserved.
+      </p>
+
+      <Dialog open={showForgot} onOpenChange={setShowForgot}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Reset Password
+            </DialogTitle>
+            <DialogDescription>
+              {forgotStep === "email" && "Enter your email address to begin password recovery."}
+              {forgotStep === "question" && "Answer the security question to reset your password."}
+              {forgotStep === "done" && "Your password has been changed. You can now log in with your new password."}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...forgotForm}>
+            <form onSubmit={forgotForm.handleSubmit(handleForgotSubmit)} className="space-y-4">
+              {forgotStep === "email" && (
+                <FormField
+                  control={forgotForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input placeholder="admin@eyir.com" {...field} className="pl-10" />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {forgotStep === "question" && (
+                <>
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <p className="text-xs font-medium text-primary mb-1">Security Question</p>
+                    <p className="text-sm font-medium">{securityQuestion}</p>
+                  </div>
                   <FormField
                     control={forgotForm.control}
-                    name="email"
+                    name="answer"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl><Input placeholder="admin@eyir.com" {...field} /></FormControl>
+                        <FormLabel>Your Answer</FormLabel>
+                        <FormControl><Input placeholder="Type your answer..." {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
-                {forgotStep === "question" && (
-                  <>
-                    <div className="rounded-lg border bg-muted p-3 text-sm">
-                      <span className="font-medium">Question: </span>{securityQuestion}
-                    </div>
-                    <FormField
-                      control={forgotForm.control}
-                      name="answer"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Your Answer</FormLabel>
-                          <FormControl><Input placeholder="Type your answer..." {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={forgotForm.control}
-                      name="newPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>New Password</FormLabel>
-                          <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                )}
-                {forgotStep === "done" ? (
-                  <Button type="button" className="w-full" onClick={() => setShowForgot(false)}>
-                    Back to Login
-                  </Button>
-                ) : (
-                  <Button type="submit" className="w-full" disabled={forgotLoading}>
-                    {forgotLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {forgotStep === "email" && "Continue"}
-                    {forgotStep === "question" && "Reset Password"}
-                  </Button>
-                )}
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-    </div>
+                  <FormField
+                    control={forgotForm.control}
+                    name="newPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>New Password</FormLabel>
+                        <FormControl><Input type="password" placeholder="Enter new password" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+              {forgotStep === "done" && (
+                <div className="text-center py-4">
+                  <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">Password successfully reset. You can now sign in with your new password.</p>
+                </div>
+              )}
+              {forgotStep === "done" ? (
+                <Button type="button" className="w-full" onClick={() => setShowForgot(false)}>
+                  Back to Login
+                </Button>
+              ) : (
+                <Button type="submit" className="w-full" disabled={forgotLoading}>
+                  {forgotLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {forgotStep === "email" && "Continue"}
+                  {forgotStep === "question" && "Reset Password"}
+                </Button>
+              )}
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

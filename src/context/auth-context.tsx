@@ -49,7 +49,7 @@ interface AuthContextType {
     avatarUrl?: string;
   }) => Promise<ActionResult>;
   updateCurrentUser: (
-    updates: Partial<Pick<Profile, 'name' | 'avatarUrl'>> & { password?: string },
+    updates: Partial<Pick<Profile, 'name' | 'avatarUrl'>> & { password?: string; email?: string },
     currentPassword?: string
   ) => Promise<ActionResult & { message: string }>;
   resetCurrentUserPassword: (newPassword: string) => Promise<ActionResult & { message: string }>;
@@ -219,15 +219,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateCurrentUser = useCallback(
     async (
-      updates: Partial<Pick<Profile, 'name' | 'avatarUrl'>> & { password?: string },
+      updates: Partial<Pick<Profile, 'name' | 'avatarUrl'>> & { password?: string; email?: string },
       currentPassword?: string
     ): Promise<ActionResult & { message: string }> => {
       if (!user) return { success: false, message: 'No user is logged in.' };
 
       if (updates.password) {
         if (!currentPassword) return { success: false, message: 'Current password is required.' };
-        // Supabase has no standalone "verify password" call — re-authenticating
-        // with the current password is the way to confirm they actually know it.
         const { error: reauthError } = await supabase.auth.signInWithPassword({
           email: user.email,
           password: currentPassword,
@@ -235,6 +233,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (reauthError) return { success: false, message: 'Current password was incorrect.' };
         const { error } = await supabase.auth.updateUser({ password: updates.password });
         if (error) return { success: false, message: error.message };
+      }
+
+      if (updates.email && currentPassword) {
+        const { data: authUser } = await supabase.auth.getUser();
+        const currentAuthEmail = authUser?.user?.email || user.email;
+        if (updates.email !== currentAuthEmail) {
+          const { error: reauthError } = await supabase.auth.signInWithPassword({
+            email: currentAuthEmail,
+            password: currentPassword,
+          });
+          if (reauthError) return { success: false, message: 'Current password was incorrect.' };
+          const { error } = await supabase.rpc('update_admin_email', {
+            user_id: user.id,
+            new_email: updates.email,
+          });
+          if (error) return { success: false, message: error.message };
+        } else {
+          const { error: profileError } = await supabase.from('profiles').update({ email: updates.email }).eq('id', user.id);
+          if (profileError) return { success: false, message: profileError.message };
+        }
       }
 
       const profileUpdates: Record<string, any> = {};
