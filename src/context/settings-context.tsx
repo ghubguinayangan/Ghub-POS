@@ -56,7 +56,7 @@ function hexToHsl(hex: string): { h: number, s: number, l: number } | null {
 // Default settings
 const defaultSettings: AppSettings = {
   lowStockThreshold: 10,
-  primaryColor: '#008080', // Default from settings page
+  primaryColor: '#008080',
   enableUtangManagement: false,
   enableStockTracking: true,
 };

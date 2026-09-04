@@ -39,6 +39,10 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     load();
+
+    const handleFocus = () => load();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   const setSelectedDeviceId = (id: string) => {

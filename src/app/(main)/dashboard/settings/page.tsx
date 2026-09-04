@@ -13,10 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Palette, Trash2, BookUser, BookCopy, AlertTriangle, Loader2 } from 'lucide-react';
+import { Palette, Trash2, BookUser, BookCopy, AlertTriangle, Loader2, ShieldQuestion } from 'lucide-react';
 import { useSettings } from '@/context/settings-context';
+import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,8 +35,55 @@ import { supabase } from '@/lib/supabase';
 export default function SettingsPage() {
     const { toast } = useToast();
     const { settings, setSettings, isLoading } = useSettings();
+    const { user } = useAuth();
 
     const [isClearing, setIsClearing] = useState(false);
+    const [securityQuestion, setSecurityQuestion] = useState('');
+    const [securityAnswer, setSecurityAnswer] = useState('');
+    const [isSavingSecurity, setIsSavingSecurity] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            const loadSecurity = async () => {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('security_question, security_answer')
+                    .eq('id', user.id)
+                    .single();
+                if (data) {
+                    setSecurityQuestion(data.security_question || '');
+                    setSecurityAnswer(data.security_answer || '');
+                }
+            };
+            loadSecurity();
+        }
+    }, [user]);
+
+    const handleSaveSecurity = async () => {
+        if (!securityQuestion.trim() || !securityAnswer.trim()) {
+            toast({
+                variant: 'destructive',
+                title: 'Missing Fields',
+                description: 'Please enter both a security question and answer.',
+            });
+            return;
+        }
+        if (!user) return;
+        setIsSavingSecurity(true);
+        const { error } = await supabase
+            .from('profiles')
+            .update({
+                security_question: securityQuestion.trim(),
+                security_answer: securityAnswer.trim().toLowerCase(),
+            })
+            .eq('id', user.id);
+        setIsSavingSecurity(false);
+        if (error) {
+            toast({ variant: 'destructive', title: 'Save Failed', description: error.message });
+        } else {
+            toast({ title: 'Security Question Saved', description: 'Your security question has been updated.' });
+        }
+    };
 
     const handleClearData = async () => {
         setIsClearing(true);
@@ -172,6 +220,42 @@ export default function SettingsPage() {
                 </div>
                 <Switch checked={settings.enableUtangManagement} onCheckedChange={(checked) => setSettings({ enableUtangManagement: checked })} />
             </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+            <div className="flex items-center gap-3">
+                <ShieldQuestion className="h-6 w-6" />
+                <CardTitle>Security Question</CardTitle>
+            </div>
+            <CardDescription>
+                Set up a security question for password recovery. If you forget your password, you can reset it by answering this question on the login page.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="security-question">Security Question</Label>
+                <Input
+                    id="security-question"
+                    placeholder="e.g. What is your mother's maiden name?"
+                    value={securityQuestion}
+                    onChange={(e) => setSecurityQuestion(e.target.value)}
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="security-answer">Answer</Label>
+                <Input
+                    id="security-answer"
+                    placeholder="Your answer"
+                    value={securityAnswer}
+                    onChange={(e) => setSecurityAnswer(e.target.value)}
+                />
+            </div>
+            <Button onClick={handleSaveSecurity} disabled={isSavingSecurity}>
+                {isSavingSecurity && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Security Question
+            </Button>
         </CardContent>
       </Card>
 

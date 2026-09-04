@@ -80,21 +80,22 @@ export interface UtangRow {
   status: string; // 'Pending' | 'Partial' | 'Paid' | 'Cancelled'
 }
 
-/** Every distinct device_id that has synced either a summary or inventory. */
+/** Every distinct device_id that has synced data in any of the ghub tables. */
 export async function getDeviceIds(): Promise<string[]> {
-  const [summaryRes, inventoryRes] = await Promise.all([
+  const [summaryRes, inventoryRes, salesRes, expensesRes, usersRes, utangRes] = await Promise.all([
     supabase.from('ghub_daily_summary').select('device_id'),
     supabase.from('ghub_inventory_levels').select('device_id'),
+    supabase.from('ghub_sales').select('device_id'),
+    supabase.from('ghub_expenses').select('device_id'),
+    supabase.from('ghub_users').select('device_id'),
+    supabase.from('ghub_utang').select('device_id'),
   ]);
 
   const ids = new Set<string>();
-  (summaryRes.data || []).forEach((r: any) => r.device_id && ids.add(r.device_id));
-  (inventoryRes.data || []).forEach((r: any) => r.device_id && ids.add(r.device_id));
+  [summaryRes, inventoryRes, salesRes, expensesRes, usersRes, utangRes].forEach((res) => {
+    (res.data || []).forEach((r: any) => r.device_id && ids.add(r.device_id));
+  });
 
-  // TEMP (remove once done debugging): hide emulator/dev-build devices from
-  // the dashboard - they sync under a "TEST-" id instead of "POS-", see
-  // generateDeviceId() in mobile/src/utils/syncService.ts. To remove: delete
-  // this filter line so every synced device shows again.
   return Array.from(ids).filter((id) => !id.startsWith('TEST-')).sort();
 }
 
