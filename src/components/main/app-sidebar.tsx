@@ -70,7 +70,7 @@ export const AppSidebar = memo(function AppSidebar() {
   }
 
   const handleProfileClick = () => {
-    router.push('/dashboard/profile');
+    router.push('/dashboard/settings');
     setOpenMobile(false);
   }
 
@@ -194,7 +194,7 @@ export const AppSidebar = memo(function AppSidebar() {
                     <DropdownMenuSeparator />
                      <DropdownMenuItem onClick={handleProfileClick}>
                         <UserIcon className="mr-2 h-4 w-4" />
-                        <span>Profile</span>
+                        <span>Settings</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleLogout}>
                         <LogOut className="mr-2 h-4 w-4" />
